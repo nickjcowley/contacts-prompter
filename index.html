@@ -8,7 +8,7 @@
   <link rel="manifest" href="./manifest.json" />
   <link rel="icon" type="image/svg+xml" href="./icon.svg" />
   <link rel="apple-touch-icon" href="./icon-192.png" />
-  <link rel="stylesheet" href="./styles.css?v=2.0.1" />
+  <link rel="stylesheet" href="./styles.css?v=2.0.2" />
 </head>
 <body>
   <!-- SIGN-IN -->
@@ -67,8 +67,8 @@
 
     <main id="people-list" class="people-list"></main>
 
-    <button id="capture-fab" class="fab" aria-label="Capture a meeting by voice">
-      <span class="fab-icon" aria-hidden="true">&#127908;</span>
+    <button id="capture-fab" class="fab" aria-label="Write up a meeting">
+      <span class="fab-icon" aria-hidden="true">&#9998;</span>
     </button>
   </div>
 
@@ -80,17 +80,16 @@
         <button class="btn btn-icon close-modal" data-close="capture-modal" aria-label="Close">&times;</button>
       </div>
       <div class="modal-body">
-        <p class="muted small-text" id="capture-hint">Say who it was, where, and what you learned. Mention anything to ask next time, and any dates (birthdays, exams, moves). You can talk about several people at once.</p>
-        <div class="mic-row">
-          <button id="mic-btn" class="mic-btn" aria-label="Start or stop recording">&#127908;</button>
-          <span id="mic-status" class="muted small-text">Tap to talk, or type below</span>
-        </div>
-        <textarea id="capture-text" rows="6" placeholder="e.g. Coffee with Sarah Jenkins after the audit meeting. Her son Jack got into Leeds for medicine. She's moving house in March. Ask how the move went. Her birthday is 14 June."></textarea>
+        <p class="muted small-text" id="capture-hint">Write or dictate who it was, where, and what you learned. Mention anything to ask next time, and any dates (birthdays, exams, moves). You can cover several people at once. Gemini will sort it into proposed updates for you to check.</p>
+        <textarea id="capture-text" rows="9" placeholder="e.g. Coffee with Sarah Jenkins after the audit meeting. Her son Jack got into Leeds for medicine. She's moving house in March. Ask how the move went. Her birthday is 14 June."></textarea>
         <p id="capture-status" class="muted small-text"></p>
       </div>
-      <div class="modal-footer">
-        <button class="btn btn-secondary close-modal" data-close="capture-modal">Cancel</button>
+      <div class="modal-footer space-between">
+        <button id="capture-clear-btn" type="button" class="btn btn-danger-outline btn-sm hidden">Discard draft</button>
+        <div class="footer-right">
+        <button class="btn btn-secondary close-modal" data-close="capture-modal">Close</button>
         <button id="capture-process-btn" class="btn btn-primary">Process</button>
+        </div>
       </div>
     </div>
   </div>
@@ -128,7 +127,7 @@
         <button class="btn btn-icon close-modal" data-close="person-modal" aria-label="Close">&times;</button>
       </div>
       <div class="modal-body">
-        <button id="p-capture-btn" class="btn btn-primary btn-full">&#127908; Capture about this person</button>
+        <button id="p-capture-btn" class="btn btn-primary btn-full">&#9998; Write a note about this person</button>
 
         <section class="detail-section" id="p-contact-section">
           <h3 class="field-label">Phone contact</h3>
@@ -147,11 +146,15 @@
         <section class="detail-section">
           <h3 class="field-label">Key dates</h3>
           <ul id="p-dates" class="plain-list"></ul>
-          <form id="p-date-form" class="inline-form wrap">
-            <input type="text" id="p-date-label" placeholder="e.g. Birthday" required />
-            <input type="date" id="p-date-value" required />
-            <label class="check-inline"><input type="checkbox" id="p-date-recurring" checked /> Yearly</label>
-            <button class="btn btn-secondary btn-sm" type="submit">Add</button>
+          <form id="p-date-form" class="stack-form">
+            <input type="text" id="p-date-label" placeholder="What? e.g. Birthday, Retirement, Exams" required />
+            <div id="p-date-value" class="fdate"></div>
+            <div class="inline-form">
+              <label class="check-inline"><input type="checkbox" id="p-date-recurring" checked /> Every year</label>
+              <button class="btn btn-secondary btn-sm" type="submit">Add date</button>
+            </div>
+            <p class="muted small-text">Fill in as much as you know: just a month, a month and year, a year, or a full date. Dates without a year repeat every year.</p>
+            <p id="p-date-error" class="error-text hidden"></p>
           </form>
         </section>
 
@@ -169,10 +172,9 @@
         <section class="detail-section">
           <h3 class="field-label">Notes</h3>
           <form id="p-note-form" class="note-form">
-            <div class="inline-form">
-              <input type="date" id="p-note-date" required />
-              <input type="text" id="p-note-location" placeholder="Where (optional)" />
-            </div>
+            <div id="p-note-date" class="fdate"></div>
+            <input type="text" id="p-note-location" placeholder="Where (optional)" />
+            <p id="p-note-error" class="error-text hidden"></p>
             <textarea id="p-note-text" rows="2" placeholder="Add a note…" required></textarea>
             <button class="btn btn-secondary btn-sm" type="submit">Add note</button>
           </form>
@@ -282,6 +284,6 @@
     </div>
   </div>
 
-  <script type="module" src="./app.js?v=2.0.1"></script>
+  <script type="module" src="./app.js?v=2.0.2"></script>
 </body>
 </html>

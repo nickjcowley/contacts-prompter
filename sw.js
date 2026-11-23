@@ -1,10 +1,10 @@
 // When you deploy: bump this AND the ?v= numbers in index.html (and below).
-const CACHE_NAME = "peoplelog-v2.0.1";
+const CACHE_NAME = "peoplelog-v2.0.2";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./styles.css?v=2.0.1",
-  "./app.js?v=2.0.1",
+  "./styles.css?v=2.0.2",
+  "./app.js?v=2.0.2",
   "./manifest.json",
   "./icon.svg",
   "./icon-192.png",

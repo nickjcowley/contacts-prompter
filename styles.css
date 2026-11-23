@@ -221,18 +221,8 @@ input:focus, select:focus, textarea:focus, .btn:focus-visible, .person-row:focus
 .divider { border: none; border-top: 1px solid var(--border); margin: 1rem 0; }
 
 /* Capture */
-.mic-row { display: flex; align-items: center; gap: 1rem; margin: 0.75rem 0; }
-.mic-btn {
-  width: 84px; height: 84px; border-radius: 50%; border: none; cursor: pointer; flex-shrink: 0;
-  background: var(--primary); color: var(--on-primary); font-size: 2.2rem;
-}
-.mic-btn.recording { background: var(--rec); animation: pulse 1.4s infinite; }
-.mic-btn:disabled { opacity: 0.4; }
-@keyframes pulse {
-  0% { box-shadow: 0 0 0 0 rgba(217, 48, 37, 0.5); }
-  70% { box-shadow: 0 0 0 18px rgba(217, 48, 37, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(217, 48, 37, 0); }
-}
+#capture-text { min-height: 12rem; font-size: 1rem; }
+.footer-right .btn { white-space: nowrap; }
 
 /* Person page */
 .detail-title-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
@@ -276,3 +266,12 @@ input:focus, select:focus, textarea:focus, .btn:focus-visible, .person-row:focus
 #e-pick-contact { margin-bottom: 0.75rem; }
 .contact-actions { display: flex; gap: 0.4rem; flex-shrink: 0; }
 a.btn { text-decoration: none; }
+
+/* Flexible Day / Month / Year picker */
+.fdate { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+.fdate .fd-d { flex: 0 0 4.7rem; width: auto; }
+.fdate .fd-m { flex: 1 1 8.5rem; min-width: 8.5rem; width: auto; }
+.fdate .fd-y { flex: 0 1 7rem; min-width: 5.5rem; width: auto; }
+.fdate .fd-today { flex: 0 0 auto; min-height: 44px; }
+.stack-form { display: flex; flex-direction: column; gap: 0.5rem; }
+.stack-form .inline-form { justify-content: space-between; }

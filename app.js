@@ -84,7 +84,7 @@ const entries = (obj) => Object.entries(obj || {}).map(([id, v]) => ({ id, ...v 
 
 function notesOf(p) {
   return entries(p.notes).sort((a, b) =>
-    (b.date || "").localeCompare(a.date || "") || (b.createdAt || 0) - (a.createdAt || 0)
+    sortKey(b.date).localeCompare(sortKey(a.date)) || (b.createdAt || 0) - (a.createdAt || 0)
   );
 }
 function openFollowUps(p) {
@@ -95,12 +95,88 @@ function lastSeen(p) {
   return n ? n.date : "";
 }
 
-function relativeDays(iso) {
-  if (!iso) return "";
-  const then = new Date(iso + "T00:00:00");
-  const now = new Date(todayISO() + "T00:00:00");
-  const days = Math.round((now - then) / 86400000);
-  if (days <= 0) return "today";
+// ---------- Flexible dates ----------
+// Stored as strings, any part optional:
+//   "2026-11-23" full · "2026-11" month+year · "2026" year only
+//   "--11-23" day+month, no year · "--11" month only
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const MONTHS_LONG = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const daysInMonth = (m, y) => new Date(y || 2000, m, 0).getDate(); // 2000 = leap year, allows 29 Feb
+
+function parseFlex(str) {
+  const s = String(str || "").trim();
+  let m;
+  if ((m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/))) return { y: +m[1], m: +m[2], d: +m[3] };
+  if ((m = s.match(/^(\d{4})-(\d{2})$/))) return { y: +m[1], m: +m[2], d: null };
+  if ((m = s.match(/^(\d{4})$/))) return { y: +m[1], m: null, d: null };
+  if ((m = s.match(/^--(\d{2})-(\d{2})$/))) return { y: null, m: +m[1], d: +m[2] };
+  if ((m = s.match(/^--(\d{2})$/))) return { y: null, m: +m[1], d: null };
+  return null;
+}
+
+function buildFlex({ y, m, d }) {
+  const p2 = (n) => String(n).padStart(2, "0");
+  if (y && m && d) return `${y}-${p2(m)}-${p2(d)}`;
+  if (y && m) return `${y}-${p2(m)}`;
+  if (y && !m && !d) return `${y}`;
+  if (!y && m && d) return `--${p2(m)}-${p2(d)}`;
+  if (!y && m) return `--${p2(m)}`;
+  return "";
+}
+
+// Check parts; returns {value} or {error}
+function validateFlex({ y, m, d }, { requireYear = false } = {}) {
+  if (!y && !m && !d) return { value: "" };
+  if (d && !m) return { error: "Choose a month to go with the day." };
+  if (y && (y < 1900 || y > 2100)) return { error: "Year should be between 1900 and 2100." };
+  if (requireYear && !y) return { error: "Add a year." };
+  if (d && d > daysInMonth(m, y)) return { error: `${MONTHS_LONG[m - 1]} doesn't have ${d} days.` };
+  return { value: buildFlex({ y, m, d }) };
+}
+
+// Accept dates from the AI or old data and tidy them; "" if unusable
+function normaliseDate(s) {
+  const p = parseFlex(s);
+  if (p) return validateFlex(p).value || "";
+  const m = String(s || "").trim().match(/^(\d{2})-(\d{2})$/); // "MM-DD"
+  return m ? normaliseDate(`--${m[1]}-${m[2]}`) : "";
+}
+
+function fmtDate(str) {
+  const p = parseFlex(str);
+  if (!p) return str || "";
+  const parts = [];
+  if (p.d) parts.push(p.d);
+  if (p.m) parts.push(p.d ? MONTHS[p.m - 1] : MONTHS_LONG[p.m - 1]);
+  if (p.y) parts.push(p.y);
+  return parts.join(" ");
+}
+
+// Sortable key so partial dates sit sensibly among full ones (start of their period)
+const sortKey = (str) => {
+  const p = parseFlex(str);
+  if (!p || !p.y) return "";
+  return `${p.y}-${String(p.m || 1).padStart(2, "0")}-${String(p.d || 1).padStart(2, "0")}`;
+};
+
+const startOfToday = () => new Date(todayISO() + "T00:00:00");
+
+// "3 days ago" for full dates; month/year wording for partial ones
+function relativeDays(str) {
+  const p = parseFlex(str);
+  if (!p || !p.y) return "";
+  const now = startOfToday();
+  if (!p.m) return p.y === now.getFullYear() ? "this year" : String(p.y);
+  if (!p.d) {
+    const diff = (now.getFullYear() - p.y) * 12 + (now.getMonth() + 1 - p.m);
+    if (diff === 0) return "this month";
+    if (diff === 1) return "last month";
+    if (diff > 1 && diff < 24) return `${diff} months ago`;
+    return fmtDate(str);
+  }
+  const days = Math.round((now - new Date(p.y, p.m - 1, p.d)) / 86400000);
+  if (days < 0) return fmtDate(str);
+  if (days === 0) return "today";
   if (days === 1) return "yesterday";
   if (days < 14) return `${days} days ago`;
   if (days < 60) return `${Math.round(days / 7)} weeks ago`;
@@ -108,51 +184,100 @@ function relativeDays(iso) {
   return `${Math.round(days / 365)} years ago`;
 }
 
-function fmtDate(iso) {
-  if (!iso) return "";
-  if (iso.startsWith("--")) {
-    const [, , m, d] = iso.split("-");
-    return new Date(2000, Number(m) - 1, Number(d)).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-  }
-  const d = new Date(iso + "T00:00:00");
-  if (isNaN(d)) return iso;
-  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
-}
-
-// Normalise a date the AI or user gave: "YYYY-MM-DD" or "--MM-DD" (year unknown)
-function normaliseDate(s) {
-  if (!s) return "";
-  s = String(s).trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-  if (/^--\d{2}-\d{2}$/.test(s)) return s;
-  if (/^\d{2}-\d{2}$/.test(s)) return "--" + s;
-  return "";
-}
-
-// Next occurrence (Date) for a key date, or null if it's a past one-off
+// Next (or current) occurrence of a key date: {start, end, precision} or null if it's past
 function nextOccurrence(kd) {
-  const iso = kd.date || "";
-  const today = new Date(todayISO() + "T00:00:00");
-  let m, d, y;
-  if (iso.startsWith("--")) {
-    [, , m, d] = iso.split("-").map(Number);
-  } else {
-    [y, m, d] = iso.split("-").map(Number);
+  const p = parseFlex(kd.date);
+  if (!p) return null;
+  const today = startOfToday();
+  const yearly = (kd.recurring || !p.y) && p.m;
+  if (p.m && p.d) {
+    const at = (y) => new Date(y, p.m - 1, Math.min(p.d, daysInMonth(p.m, y)));
+    if (yearly) {
+      let start = at(today.getFullYear());
+      if (start < today) start = at(today.getFullYear() + 1);
+      return { start, end: start, precision: "day" };
+    }
+    const start = at(p.y);
+    return start >= today ? { start, end: start, precision: "day" } : null;
   }
-  if (!m || !d) return null;
-  if (kd.recurring || !y) {
-    let next = new Date(today.getFullYear(), m - 1, d);
-    if (next < today) next = new Date(today.getFullYear() + 1, m - 1, d);
-    return next;
+  if (p.m) {
+    const period = (y) => ({ start: new Date(y, p.m - 1, 1), end: new Date(y, p.m, 0), precision: "month" });
+    if (yearly) {
+      let o = period(today.getFullYear());
+      if (o.end < today) o = period(today.getFullYear() + 1);
+      return o;
+    }
+    const o = period(p.y);
+    return o.end >= today ? o : null;
   }
-  const once = new Date(y, m - 1, d);
-  return once >= today ? once : null;
+  const o = { start: new Date(p.y, 0, 1), end: new Date(p.y, 11, 31), precision: "year" };
+  return o.end >= today ? o : null;
 }
 
 function daysUntil(date) {
-  const today = new Date(todayISO() + "T00:00:00");
-  return Math.round((date - today) / 86400000);
+  return Math.round((date - startOfToday()) / 86400000);
 }
+
+// Human wording for when an occurrence is
+function whenLabel(occ) {
+  if (!occ) return "passed";
+  const today = startOfToday();
+  const n = daysUntil(occ.start);
+  if (occ.precision === "day") return n === 0 ? "today" : n === 1 ? "tomorrow" : `in ${n} days`;
+  if (occ.start <= today && today <= occ.end) return occ.precision === "month" ? "this month" : "this year";
+  if (occ.precision === "month") {
+    const months = (occ.start.getFullYear() - today.getFullYear()) * 12 + occ.start.getMonth() - today.getMonth();
+    return months === 1 ? "next month" : `in ${months} months`;
+  }
+  return occ.start.getFullYear() === today.getFullYear() + 1 ? "next year" : `in ${occ.start.getFullYear()}`;
+}
+
+// ---------- Day / Month / Year picker ----------
+function fdateHtml(value, { yearRequired = false, requireYear = false } = {}) {
+  yearRequired = yearRequired || requireYear;
+  const p = parseFlex(value) || { y: null, m: null, d: null };
+  return `
+    <select class="fd-d" aria-label="Day"><option value="">Day</option>${Array.from({ length: 31 }, (_, i) =>
+      `<option value="${i + 1}" ${p.d === i + 1 ? "selected" : ""}>${i + 1}</option>`).join("")}</select>
+    <select class="fd-m" aria-label="Month"><option value="">Month</option>${MONTHS_LONG.map((mn, i) =>
+      `<option value="${i + 1}" ${p.m === i + 1 ? "selected" : ""}>${mn}</option>`).join("")}</select>
+    <input class="fd-y" type="text" inputmode="numeric" maxlength="4" pattern="\\d{4}" placeholder="${yearRequired ? "Year" : "Year (optional)"}" aria-label="Year" value="${p.y || ""}" />
+    <button type="button" class="btn btn-secondary btn-sm fd-today" title="Set to today">Today</button>`;
+}
+
+function setFdate(el, value, opts) {
+  el.innerHTML = fdateHtml(value, opts);
+}
+
+function readFdate(el, opts) {
+  const num = (sel) => {
+    const v = el.querySelector(sel).value.trim();
+    return v ? Number(v) : null;
+  };
+  const yRaw = el.querySelector(".fd-y").value.trim();
+  if (yRaw && !/^\d{4}$/.test(yRaw)) return { error: "Year should be four digits, e.g. 2026." };
+  return validateFlex({ y: num(".fd-y"), m: num(".fd-m"), d: num(".fd-d") }, opts);
+}
+
+// Clear a stale date error as soon as the date is changed
+document.addEventListener("change", (e) => {
+  const fd = e.target.closest?.(".fdate");
+  if (!fd) return;
+  const err = fd.parentElement.querySelector(".error-text");
+  if (err) err.classList.add("hidden");
+});
+
+// "Today" buttons inside any picker
+document.addEventListener("click", (e) => {
+  const b = e.target.closest(".fd-today");
+  if (!b) return;
+  const el = b.closest(".fdate");
+  const now = new Date();
+  el.querySelector(".fd-d").value = String(now.getDate());
+  el.querySelector(".fd-m").value = String(now.getMonth() + 1);
+  el.querySelector(".fd-y").value = String(now.getFullYear());
+  el.dispatchEvent(new Event("change", { bubbles: true }));
+});
 
 // ==========================================
 // PHONE CONTACTS (Contact Picker API — Android Chrome)
@@ -364,13 +489,14 @@ function renderPrompts() {
   const upcoming = [];
   for (const p of people) {
     for (const kd of entries(p.dates)) {
-      const next = nextOccurrence(kd);
-      if (!next) continue;
-      const n = daysUntil(next);
-      if (n >= 0 && n <= 30) upcoming.push({ p, kd, n });
+      const occ = nextOccurrence(kd);
+      if (!occ || occ.precision === "year") continue; // year-only dates are too vague to prompt
+      const n = daysUntil(occ.start);
+      const current = occ.start <= startOfToday() && startOfToday() <= occ.end;
+      if (current || (n >= 0 && n <= 30)) upcoming.push({ p, kd, occ, n });
     }
   }
-  upcoming.sort((a, b) => a.n - b.n);
+  upcoming.sort((a, b) => a.occ.start - b.occ.start);
 
   const datesEl = $("prompts-dates");
   datesEl.innerHTML = upcoming.length
@@ -378,9 +504,9 @@ function renderPrompts() {
       upcoming
         .slice(0, 8)
         .map(
-          ({ p, kd, n }) => `
+          ({ p, kd, occ }) => `
         <button class="prompt-item" data-open="${escapeHtml(p.id)}">
-          <span class="prompt-when">${n === 0 ? "Today" : n === 1 ? "Tomorrow" : `In ${n} days`}</span>
+          <span class="prompt-when">${escapeHtml(whenLabel(occ))}</span>
           <span><strong>${escapeHtml(p.name)}</strong> · ${escapeHtml(kd.label)}</span>
         </button>`
         )
@@ -391,7 +517,7 @@ function renderPrompts() {
   const withFollow = people
     .map((p) => ({ p, f: openFollowUps(p) }))
     .filter((x) => x.f.length)
-    .sort((a, b) => lastSeen(b.p).localeCompare(lastSeen(a.p)));
+    .sort((a, b) => sortKey(lastSeen(b.p)).localeCompare(sortKey(lastSeen(a.p))));
 
   const fuEl = $("prompts-followups");
   fuEl.innerHTML = withFollow.length
@@ -448,7 +574,7 @@ function renderList() {
   shown.sort((a, b) =>
     sortMode === "name"
       ? (a.name || "").localeCompare(b.name || "")
-      : lastSeen(b).localeCompare(lastSeen(a)) || (b.updatedAt || 0) - (a.updatedAt || 0)
+      : sortKey(lastSeen(b)).localeCompare(sortKey(lastSeen(a))) || (b.updatedAt || 0) - (a.updatedAt || 0)
   );
 
   $("results-count").textContent =
@@ -457,7 +583,7 @@ function renderList() {
       : `Showing ${shown.length} of ${people.length}`;
 
   if (!people.length) {
-    list.innerHTML = `<div class="empty"><p><strong>No one here yet.</strong></p><p class="muted">Tap the microphone after you next meet someone, and say what you learned.</p></div>`;
+    list.innerHTML = `<div class="empty"><p><strong>No one here yet.</strong></p><p class="muted">After you next meet someone, tap ✎ and jot down (or dictate) what you learned.</p></div>`;
     return;
   }
   if (!shown.length) {
@@ -490,7 +616,8 @@ function renderList() {
 // ==========================================
 function openPerson(id) {
   activePersonId = id;
-  $("p-note-date").value = todayISO();
+  setFdate($("p-note-date"), todayISO(), { requireYear: true });
+  setFdate($("p-date-value"), "");
   renderPerson();
   openModal("person-modal");
 }
@@ -525,13 +652,12 @@ function renderPerson() {
   // Dates
   const kds = entries(p.dates)
     .map((kd) => ({ ...kd, next: nextOccurrence(kd) }))
-    .sort((a, b) => (a.next?.getTime() ?? Infinity) - (b.next?.getTime() ?? Infinity));
+    .sort((a, b) => (a.next?.start.getTime() ?? Infinity) - (b.next?.start.getTime() ?? Infinity));
   $("p-dates").innerHTML = kds.length
     ? kds
         .map((kd) => {
-          const n = kd.next ? daysUntil(kd.next) : null;
-          const when = n === null ? "passed" : n === 0 ? "today" : `in ${n} days`;
-          return `<li><span><strong>${escapeHtml(kd.label)}</strong> · ${escapeHtml(fmtDate(kd.date))}${kd.recurring ? " (yearly)" : ""} <span class="muted">— ${when}</span></span>
+          const yearly = (kd.recurring || !parseFlex(kd.date)?.y) && parseFlex(kd.date)?.m;
+          return `<li><span><strong>${escapeHtml(kd.label)}</strong> · ${escapeHtml(fmtDate(kd.date))}${yearly ? " (yearly)" : ""} <span class="muted">— ${escapeHtml(whenLabel(kd.next))}</span></span>
             <button class="btn-x" data-date-del="${escapeHtml(kd.id)}" aria-label="Delete">&times;</button></li>`;
         })
         .join("")
@@ -638,10 +764,21 @@ $("p-followup-form").addEventListener("submit", async (e) => {
 $("p-date-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const label = $("p-date-label").value.trim();
-  const date = $("p-date-value").value;
-  if (!label || !date) return;
-  const recurring = $("p-date-recurring").checked;
+  const r = readFdate($("p-date-value"));
+  const err = $("p-date-error");
+  if (r.error || !r.value) {
+    err.textContent = r.error || "Choose at least a month or a year.";
+    err.classList.remove("hidden");
+    return;
+  }
+  err.classList.add("hidden");
+  if (!label) return;
+  const date = r.value;
+  const p = parseFlex(date);
+  // Yearly only makes sense with a month; a date with no year is always yearly
+  const recurring = Boolean(p.m) && (!p.y || $("p-date-recurring").checked);
   e.target.reset();
+  setFdate($("p-date-value"), "");
   $("p-date-recurring").checked = true;
   await updateDoc(personRef(activePersonId), {
     [`dates.${newId()}`]: { label, date, recurring },
@@ -681,14 +818,23 @@ $("p-note-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const text = $("p-note-text").value.trim();
   if (!text) return;
+  const r = readFdate($("p-note-date"), { requireYear: true });
+  const err = $("p-note-error");
+  if (r.error) {
+    err.textContent = r.error;
+    err.classList.remove("hidden");
+    return;
+  }
+  err.classList.add("hidden");
   const note = {
-    date: $("p-note-date").value || todayISO(),
+    date: r.value, // may be "" (undated), "2026", "2026-03" or a full date
     location: $("p-note-location").value.trim(),
     text,
     createdAt: Date.now()
   };
   $("p-note-text").value = "";
   $("p-note-location").value = "";
+  setFdate($("p-note-date"), todayISO(), { requireYear: true });
   await updateDoc(personRef(activePersonId), { [`notes.${newId()}`]: note, updatedAt: Date.now() });
 });
 
@@ -768,80 +914,51 @@ $("e-delete-btn").addEventListener("click", async () => {
 });
 
 // ==========================================
-// 10. VOICE CAPTURE
+// 10. CAPTURE (free text — dictate with Wispr Flow or the keyboard's mic)
 // ==========================================
-const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-let recognition = null;
-let wantRecording = false;
-let committedText = "";
-
-function setMicUI(on) {
-  $("mic-btn").classList.toggle("recording", on);
-  $("mic-status").textContent = on ? "Listening… tap to stop" : "Tap to talk, or type below";
+// The draft is kept on this device until it's saved, so switching apps or
+// closing the box by accident doesn't lose what you've written.
+const DRAFT_KEY = "peoplelog-capture-draft";
+function loadDraft() {
+  try { return JSON.parse(localStorage.getItem(DRAFT_KEY) || "null"); } catch { return null; }
+}
+function saveDraft() {
+  try {
+    const text = $("capture-text").value;
+    if (text.trim()) localStorage.setItem(DRAFT_KEY, JSON.stringify({ text, contextId: captureContextId }));
+    else localStorage.removeItem(DRAFT_KEY);
+  } catch { /* storage unavailable */ }
+}
+function clearDraft() {
+  try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
 }
 
-if (SpeechRecognition) {
-  recognition = new SpeechRecognition();
-  recognition.lang = "en-GB";
-  recognition.continuous = true;
-  recognition.interimResults = true;
-
-  recognition.onresult = (event) => {
-    let interim = "";
-    for (let i = event.resultIndex; i < event.results.length; i++) {
-      const r = event.results[i];
-      if (r.isFinal) committedText = (committedText + " " + r[0].transcript).trim();
-      else interim += r[0].transcript;
-    }
-    $("capture-text").value = (committedText + " " + interim).trim();
-  };
-  // Android Chrome ends sessions after pauses; restart while the user wants to keep talking
-  recognition.onend = () => {
-    if (wantRecording) {
-      try { recognition.start(); } catch { wantRecording = false; setMicUI(false); }
-    } else {
-      setMicUI(false);
-    }
-  };
-  recognition.onerror = (e) => {
-    if (e.error === "no-speech") return;
-    wantRecording = false;
-    setMicUI(false);
-    $("capture-status").textContent =
-      e.error === "not-allowed" ? "Microphone permission was refused." : "Speech error: " + e.error;
-  };
-} else {
-  $("mic-btn").disabled = true;
-  $("mic-status").textContent = "Voice input isn't supported in this browser — type instead.";
-}
-
-function startMic() {
-  if (!recognition || wantRecording) return;
-  committedText = $("capture-text").value.trim();
-  wantRecording = true;
-  setMicUI(true);
-  try { recognition.start(); } catch { /* already started */ }
-}
-function stopMic() {
-  if (!recognition) return;
-  wantRecording = false;
-  recognition.stop();
-  setMicUI(false);
-}
-
-$("mic-btn").addEventListener("click", () => (wantRecording ? stopMic() : startMic()));
+$("capture-text").addEventListener("input", saveDraft);
+$("capture-text").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) $("capture-process-btn").click();
+});
+$("capture-clear-btn").addEventListener("click", () => {
+  $("capture-text").value = "";
+  clearDraft();
+  $("capture-text").focus();
+});
 
 $("capture-fab").addEventListener("click", () => openCapture(null));
 
 function openCapture(contextId) {
+  const draft = loadDraft();
+  // Resume an unsaved draft if it was for the same person (or for no one)
+  const resume = draft && (draft.contextId || null) === (contextId || null);
   captureContextId = contextId;
   const p = contextId ? people.find((x) => x.id === contextId) : null;
   $("capture-title").textContent = p ? `About ${p.name}` : "Who did you just meet?";
-  $("capture-text").value = "";
-  $("capture-status").textContent = "";
-  committedText = "";
+  $("capture-text").value = resume ? draft.text : "";
+  $("capture-status").textContent = resume ? "Carried on from your unsaved draft." : "";
+  $("capture-clear-btn").classList.toggle("hidden", !resume);
   openModal("capture-modal");
-  startMic();
+  const box = $("capture-text");
+  box.focus();
+  box.setSelectionRange(box.value.length, box.value.length);
 }
 
 // ==========================================
@@ -905,17 +1022,16 @@ Each object:
   "name": full name as best known,
   "category": "Work" | "Social" | "Both",
   "summary": a short "who they are" line (role/organisation, how the user knows them, a memorable trait). For existing people return a revised summary ONLY if the note adds lasting identity information, else null. For new people always provide one.
-  "note": {"date": "YYYY-MM-DD" (default today; resolve 'yesterday' etc.), "location": string or "", "text": concise third-person record of what was learned/discussed, keeping concrete facts like names of partners/children, places, plans} or null,
+  "note": {"date": when it happened — "YYYY-MM-DD" if known (default today; resolve 'yesterday' etc.), or "YYYY-MM" / "YYYY" if only the month or year is given, "location": string or "", "text": concise third-person record of what was learned/discussed, keeping concrete facts like names of partners/children, places, plans} or null,
   "newFollowUps": [strings — things to ask or check next time, e.g. "Ask how the house move went"],
   "completedFollowUpIds": [ids from that person's openFollowUps that the note shows have now been asked/answered],
-  "dates": [{"label": "Birthday" | "Son Jack's exams" | ..., "date": "YYYY-MM-DD", or "--MM-DD" if the year is unknown, "recurring": true for birthdays/anniversaries, false for one-offs}],
+  "dates": [{"label": "Birthday" | "Son Jack's exams" | ..., "date": as precise as the note allows — "YYYY-MM-DD", "YYYY-MM" (month and year), "YYYY" (year only), "--MM-DD" (day and month, year unknown) or "--MM" (month only, e.g. "exams every June"), "recurring": true for birthdays/anniversaries/annual events, false for one-offs}],
   "links": [{"otherName": name, "otherPersonId": existing id or null, "label": how THIS person relates to the other, e.g. "Partner of", "reciprocalLabel": the reverse, e.g. "Partner of"}] — only between people who are both in this result or already exist; do not create links to people not in either list.
 }
 Do not invent facts. Use British English.`;
 }
 
 $("capture-process-btn").addEventListener("click", async () => {
-  stopMic();
   const text = $("capture-text").value.trim();
   const status = $("capture-status");
   if (!text) {
@@ -1010,11 +1126,12 @@ function renderReview() {
         ${ex ? `<p class="small-text muted">Updating existing record${ex.summary ? `: ${escapeHtml(ex.summary)}` : ""}</p>` : `<p class="small-text rv-new">Will create a new person</p>`}
         ${r.summary ? item("summary", r.summary.keep, `<span class="rv-tag">${ex ? "New summary" : "Who they are"}</span><textarea rows="2" data-field="${i}.summary.text">${escapeHtml(r.summary.text)}</textarea>`) : ""}
         ${r.note ? item("note", r.note.keep, `<span class="rv-tag">Note</span>
-            <div class="inline-form"><input type="date" data-field="${i}.note.date" value="${escapeHtml(r.note.date)}"/><input type="text" data-field="${i}.note.location" value="${escapeHtml(r.note.location)}" placeholder="Where"/></div>
+            <div class="fdate" data-fdate-field="${i}.note.date">${fdateHtml(r.note.date, { yearRequired: true })}</div>
+            <input type="text" data-field="${i}.note.location" value="${escapeHtml(r.note.location)}" placeholder="Where"/>
             <textarea rows="3" data-field="${i}.note.text">${escapeHtml(r.note.text)}</textarea>`) : ""}
         ${r.followUps.map((f, j) => item(`followUps.${j}`, f.keep, `<span class="rv-tag">Ask next time</span><input type="text" data-field="${i}.followUps.${j}.text" value="${escapeHtml(f.text)}"/>`)).join("")}
         ${r.completed.map((c, j) => item(`completed.${j}`, c.keep, `<span class="rv-tag">Mark as asked</span> <s>${escapeHtml(fuText(c.id))}</s>`)).join("")}
-        ${r.dates.map((d, j) => item(`dates.${j}`, d.keep, `<span class="rv-tag">Date</span> ${escapeHtml(d.label)} · ${escapeHtml(fmtDate(d.date))}${d.recurring ? " (yearly)" : ""}`)).join("")}
+        ${r.dates.map((d, j) => item(`dates.${j}`, d.keep, `<span class="rv-tag">Date</span> ${escapeHtml(d.label)} · ${escapeHtml(fmtDate(d.date))}${(d.recurring || !parseFlex(d.date)?.y) && parseFlex(d.date)?.m ? " (yearly)" : ""}`)).join("")}
         ${r.links.map((l, j) => {
           const t = resolveLinkTarget(l, r);
           return t
@@ -1039,8 +1156,19 @@ $("review-list").addEventListener("input", (e) => {
   const [i, ...rest] = f.split(".");
   setPath(reviewProposals[Number(i)], rest.join("."), e.target.value);
 });
+$("review-list").addEventListener("input", (e) => {
+  const fd = e.target.closest?.("[data-fdate-field]");
+  if (fd) syncReviewFdate(fd);
+});
+function syncReviewFdate(el) {
+  const [i, ...rest] = el.dataset.fdateField.split(".");
+  const r = readFdate(el, { requireYear: true });
+  setPath(reviewProposals[Number(i)], rest.join("."), r.error ? null : r.value);
+}
 $("review-list").addEventListener("change", (e) => {
   const t = e.target;
+  const fd = t.closest?.("[data-fdate-field]");
+  if (fd) return syncReviewFdate(fd);
   if (t.dataset.keep) {
     const [i, ...rest] = t.dataset.keep.split(".");
     setPath(reviewProposals[Number(i)], rest.join(".") + ".keep", t.checked);
@@ -1069,6 +1197,14 @@ $("review-back-btn").addEventListener("click", () => {
 });
 
 $("review-save-btn").addEventListener("click", async () => {
+  for (const el of document.querySelectorAll("#review-list [data-fdate-field]")) {
+    const r = readFdate(el, { requireYear: true });
+    if (r.error) {
+      alert("Note date: " + r.error);
+      el.querySelector("select, input").focus();
+      return;
+    }
+  }
   const now = Date.now();
   const batch = writeBatch(db);
   const idForKey = {};
@@ -1090,7 +1226,7 @@ $("review-save-btn").addEventListener("click", async () => {
       });
     }
     if (r.note?.keep && r.note.text.trim()) {
-      upd[`notes.${newId()}`] = { date: r.note.date || todayISO(), location: r.note.location.trim(), text: r.note.text.trim(), createdAt: now };
+      upd[`notes.${newId()}`] = { date: r.note.date ?? todayISO(), location: r.note.location.trim(), text: r.note.text.trim(), createdAt: now };
     }
     r.followUps.filter((f) => f.keep && f.text.trim()).forEach((f) => {
       upd[`followUps.${newId()}`] = { text: f.text.trim(), done: false, createdAt: now };
@@ -1126,6 +1262,7 @@ $("review-save-btn").addEventListener("click", async () => {
   }
   closeModal("review-modal");
   reviewProposals = [];
+  clearDraft();
   if (captureContextId) openPerson(captureContextId);
 });
 
@@ -1151,7 +1288,7 @@ $("bulk-parse-btn").addEventListener("click", async () => {
   $("bulk-save-btn").classList.add("hidden");
   try {
     const out = await callGeminiJson(`Extract every distinct person from the text below. Today is ${todayISO()}.
-Return JSON: {"people": [{"name": string, "category": "Work"|"Social"|"Both", "summary": short "who they are" line, "notes": everything else known about them as concise prose, "dates": [{"label": string, "date": "YYYY-MM-DD" or "--MM-DD", "recurring": bool}]}]}
+Return JSON: {"people": [{"name": string, "category": "Work"|"Social"|"Both", "summary": short "who they are" line, "notes": everything else known about them as concise prose, "dates": [{"label": string, "date": "YYYY-MM-DD", "YYYY-MM", "YYYY", "--MM-DD" or "--MM" — as precise as the text allows, "recurring": bool}]}]}
 Do not invent facts. British English.
 Text:
 """${text}"""`);
@@ -1273,7 +1410,6 @@ function closeModal(id) {
   $(id).classList.add("hidden");
   const i = modalStack.indexOf(id);
   if (i >= 0) modalStack.splice(i, 1);
-  if (id === "capture-modal") stopMic();
   if (!modalStack.length) document.body.classList.remove("modal-open");
 }
 

@@ -1,14 +1,14 @@
 # PeopleLog (contacts-prompter)
 
-A private memory aid for the people you meet. After meeting someone, tap the microphone, say what you learned, and Gemini turns it into proposed updates (a note, things to ask next time, key dates, connections) that you approve before anything is saved.
+A private memory aid for the people you meet. After meeting someone, tap ✎ and write (or dictate, e.g. with Wispr Flow) what you learned, and Gemini turns it into proposed updates (a note, things to ask next time, key dates, connections) that you approve before anything is saved.
 
 Runs as an installable web app (PWA) on GitHub Pages, with sign-in and sync through Firebase. Works offline; changes sync when you're back online.
 
 ## Using it
 
-- **Big mic button** – talk about one or more people. The AI matches names to people already in your list, or proposes new ones. Untick or edit anything on the review screen, then Save.
+- **Big ✎ button** – write about one or more people. Unsaved drafts are kept on the device. The AI matches names to people already in your list, or proposes new ones. Untick or edit anything on the review screen, then Save.
 - **Home screen prompts** – key dates in the next 30 days and people with open "ask next time" items.
-- **Person page** – who they are, things to ask (tick when done), key dates, connections, and a dated notes timeline. "Capture about this person" records a note aimed at them.
+- **Person page** – who they are, things to ask (tick when done), key dates, connections, and a dated notes timeline. "Write a note about this person" aims the note at them.
 - **Phone contact** – on Android Chrome, link a person to a phonebook contact (on their page, or when adding them). PeopleLog keeps a copy of the name, numbers and emails, with Call / Text / Email buttons; use *Refresh from phone* if they change. Browsers can't hold a live link into the phonebook. Phone details are never sent to Gemini.
 - **Settings** – Gemini key and model, bulk import from pasted text, backup download and restore, sign out (also clears the copy stored on the device).
 
@@ -46,4 +46,4 @@ With each release, bump `CACHE_NAME` in `sw.js` and the matching `?v=` numbers o
 
 ## Privacy note
 
-This holds personal information about real people. When you use the AI, the note you dictate, plus a short summary of your existing contacts (names, summaries, open follow-ups, two most recent notes) so it can match names, is sent to Google's Gemini API. Voice input in Chrome is also processed by Google. Write entries as if the person might one day read them.
+This holds personal information about real people. When you use the AI, the note you dictate, plus a short summary of your existing contacts (names, summaries, open follow-ups, two most recent notes) so it can match names, is sent to Google's Gemini API. Write entries as if the person might one day read them.
