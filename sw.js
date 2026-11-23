@@ -1,70 +1,60 @@
-const CACHE_NAME = "peoplelog-shell-v1";
+// Bump this when you deploy, so phones drop the old copy promptly.
+const CACHE_NAME = "peoplelog-v2.0.0";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./styles.css",
   "./app.js",
   "./manifest.json",
-  "./icon.svg"
+  "./icon.svg",
+  "./icon-192.png",
+  "./icon-512.png"
 ];
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL))
-  );
+  event.waitUntil(caches.open(CACHE_NAME).then((c) => c.addAll(APP_SHELL)));
   self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
-    )
+    caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k))))
   );
   self.clients.claim();
 });
 
 self.addEventListener("fetch", (event) => {
-  const url = new URL(event.request.url);
+  const req = event.request;
+  if (req.method !== "GET") return;
+  const url = new URL(req.url);
 
-  // Let Firestore & Gemini API traffic go directly to the network
-  if (
-    url.hostname.includes("firestore.googleapis.com") ||
-    url.hostname.includes("generativelanguage.googleapis.com") ||
-    url.hostname.includes("identitytoolkit.googleapis.com")
-  ) {
-    return;
-  }
-
-  // Cache Firebase JS SDK modules from gstatic for offline boot
-  if (url.hostname === "www.gstatic.com") {
+  // Firebase JS SDK: versioned URLs never change, so cache-first is safe
+  if (url.hostname === "www.gstatic.com" && url.pathname.startsWith("/firebasejs/")) {
     event.respondWith(
       caches.open(CACHE_NAME).then(async (cache) => {
-        const cached = await cache.match(event.request);
-        if (cached) return cached;
-        const fresh = await fetch(event.request);
-        cache.put(event.request, fresh.clone());
-        return fresh;
+        const hit = await cache.match(req);
+        if (hit) return hit;
+        const res = await fetch(req);
+        if (res.ok) cache.put(req, res.clone());
+        return res;
       })
     );
     return;
   }
 
-  // Cache-first with background refresh for local app shell
+  // Own files: network first (so updates show immediately), cache when offline
   if (url.origin === self.location.origin) {
     event.respondWith(
-      caches.match(event.request).then((cached) => {
-        const fetchPromise = fetch(event.request)
-          .then((response) => {
-            if (response && response.status === 200) {
-              const copy = response.clone();
-              caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
-            }
-            return response;
-          })
-          .catch(() => cached);
-        return cached || fetchPromise;
-      })
+      fetch(req)
+        .then((res) => {
+          if (res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE_NAME).then((c) => c.put(req, copy));
+          }
+          return res;
+        })
+        .catch(() => caches.match(req).then((hit) => hit || caches.match("./index.html")))
     );
   }
+  // Everything else (Firestore, Google sign-in, Gemini) goes straight to the network
 });

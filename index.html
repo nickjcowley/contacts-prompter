@@ -1,337 +1,283 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en-GB">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="theme-color" content="#1e3a5f" />
-  <title>PeopleLog — Personal CRM</title>
+  <title>PeopleLog</title>
   <link rel="manifest" href="./manifest.json" />
   <link rel="icon" type="image/svg+xml" href="./icon.svg" />
-  <link rel="apple-touch-icon" href="./icon.svg" />
+  <link rel="apple-touch-icon" href="./icon-192.png" />
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
-  <!-- AUTH SCREEN -->
+  <!-- SIGN-IN -->
   <main id="auth-view" class="auth-container hidden">
     <div class="auth-card">
-      <img src="./icon.svg" alt="PeopleLog" class="auth-logo" />
+      <img src="./icon.svg" alt="" class="auth-logo" />
       <h1>PeopleLog</h1>
-      <p class="muted">Offline-first personal record of work &amp; social contacts.</p>
-      <button id="google-signin-btn" class="btn btn-primary btn-full">
-        Sign in with Google
-      </button>
+      <p class="muted">Remember the people you meet.</p>
+      <button id="google-signin-btn" class="btn btn-primary btn-full">Sign in with Google</button>
       <p id="auth-error" class="error-text hidden"></p>
     </div>
   </main>
 
-  <!-- MAIN APPLICATION -->
+  <!-- APP -->
   <div id="app-view" class="app-shell hidden">
     <header class="topbar">
       <div class="topbar-left">
         <img src="./icon.svg" alt="" class="header-logo" />
         <div>
           <h1 class="app-title">PeopleLog</h1>
-          <span id="sync-status" class="status-pill status-synced">Connecting...</span>
+          <span id="sync-status" class="status-pill">Connecting…</span>
         </div>
       </div>
       <div class="topbar-actions">
-        <button id="open-import-btn" class="btn btn-secondary" title="AI Bulk Import">
-          Bulk Import
-        </button>
-        <button id="open-settings-btn" class="btn btn-icon" title="Settings" aria-label="Settings">
-          &#9881;
-        </button>
-        <button id="open-add-btn" class="btn btn-primary">
-          + Add
-        </button>
+        <button id="open-add-btn" class="btn btn-secondary btn-sm" title="Add a person manually">+ Person</button>
+        <button id="open-settings-btn" class="btn btn-icon" title="Settings" aria-label="Settings">&#9881;</button>
       </div>
     </header>
 
-    <section class="search-bar-wrap">
-      <div class="search-input-box">
-        <span class="search-icon">&#128269;</span>
-        <input
-          type="search"
-          id="search-input"
-          placeholder="Search name, descriptor, family, experience, notes..."
-          autocomplete="off"
-        />
-        <button id="clear-search-btn" class="clear-btn hidden" aria-label="Clear search">&times;</button>
-      </div>
-      <div id="results-count" class="results-meta">0 people</div>
+    <p id="app-error" class="error-banner hidden"></p>
+
+    <!-- PROMPTS -->
+    <section id="prompts-panel" class="prompts hidden">
+      <div id="prompts-dates" class="prompt-group"></div>
+      <div id="prompts-followups" class="prompt-group"></div>
     </section>
 
-    <main id="people-grid" class="people-grid"></main>
+    <section class="search-bar-wrap">
+      <div class="search-input-box">
+        <span class="search-icon" aria-hidden="true">&#128269;</span>
+        <input type="search" id="search-input" placeholder="Search anything you remember…" autocomplete="off" />
+      </div>
+      <div class="filter-row">
+        <div class="seg" role="group" aria-label="Category filter">
+          <button class="seg-btn active" data-cat="All">All</button>
+          <button class="seg-btn" data-cat="Work">Work</button>
+          <button class="seg-btn" data-cat="Social">Social</button>
+        </div>
+        <div class="seg" role="group" aria-label="Sort">
+          <button class="seg-btn active" data-sort="recent">Recent</button>
+          <button class="seg-btn" data-sort="name">A–Z</button>
+        </div>
+      </div>
+      <div id="results-count" class="results-meta"></div>
+    </section>
+
+    <main id="people-list" class="people-list"></main>
+
+    <button id="capture-fab" class="fab" aria-label="Capture a meeting by voice">
+      <span class="fab-icon" aria-hidden="true">&#127908;</span>
+    </button>
   </div>
 
-  <!-- PERSON DETAIL MODAL -->
-  <div id="detail-modal" class="modal-backdrop hidden">
+  <!-- CAPTURE -->
+  <div id="capture-modal" class="modal-backdrop hidden" data-sticky="1">
     <div class="modal-card modal-large">
       <div class="modal-header">
-        <div class="detail-hero">
-          <div id="detail-avatar" class="avatar avatar-lg"></div>
-          <div>
-            <div class="detail-title-row">
-              <h2 id="detail-name"></h2>
-              <span id="detail-category" class="badge"></span>
-            </div>
-            <p id="detail-role" class="muted"></p>
-          </div>
-        </div>
-        <button class="btn btn-icon close-modal" data-close="detail-modal">&times;</button>
+        <h2 id="capture-title">Who did you just meet?</h2>
+        <button class="btn btn-icon close-modal" data-close="capture-modal" aria-label="Close">&times;</button>
       </div>
-
       <div class="modal-body">
-        <div id="detail-descriptor-box" class="descriptor-callout">
-          <span class="field-label">Descriptor</span>
-          <p id="detail-descriptor"></p>
+        <p class="muted small-text" id="capture-hint">Say who it was, where, and what you learned. Mention anything to ask next time, and any dates (birthdays, exams, moves). You can talk about several people at once.</p>
+        <div class="mic-row">
+          <button id="mic-btn" class="mic-btn" aria-label="Start or stop recording">&#127908;</button>
+          <span id="mic-status" class="muted small-text">Tap to talk, or type below</span>
         </div>
+        <textarea id="capture-text" rows="6" placeholder="e.g. Coffee with Sarah Jenkins after the audit meeting. Her son Jack got into Leeds for medicine. She's moving house in March. Ask how the move went. Her birthday is 14 June."></textarea>
+        <p id="capture-status" class="muted small-text"></p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary close-modal" data-close="capture-modal">Cancel</button>
+        <button id="capture-process-btn" class="btn btn-primary">Process</button>
+      </div>
+    </div>
+  </div>
 
-        <div class="detail-grid">
-          <div class="detail-section">
-            <span class="field-label">Family &amp; Personal</span>
-            <p id="detail-family" class="preserve-lines"></p>
+  <!-- REVIEW PROPOSED CHANGES -->
+  <div id="review-modal" class="modal-backdrop hidden" data-sticky="1">
+    <div class="modal-card modal-large">
+      <div class="modal-header">
+        <h2>Check before saving</h2>
+        <button class="btn btn-icon close-modal" data-close="review-modal" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="muted small-text">Untick anything wrong. Text boxes can be edited.</p>
+        <div id="review-list"></div>
+      </div>
+      <div class="modal-footer">
+        <button id="review-back-btn" class="btn btn-secondary">Back</button>
+        <button id="review-save-btn" class="btn btn-primary">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PERSON -->
+  <div id="person-modal" class="modal-backdrop hidden">
+    <div class="modal-card modal-large">
+      <div class="modal-header">
+        <div>
+          <div class="detail-title-row">
+            <h2 id="p-name"></h2>
+            <span id="p-category" class="badge"></span>
           </div>
-          <div class="detail-section">
-            <span class="field-label">Previous Experience &amp; Context</span>
-            <p id="detail-experience" class="preserve-lines"></p>
-          </div>
+          <p id="p-summary" class="muted"></p>
+          <p id="p-lastseen" class="muted small-text"></p>
         </div>
+        <button class="btn btn-icon close-modal" data-close="person-modal" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <button id="p-capture-btn" class="btn btn-primary btn-full">&#127908; Capture about this person</button>
 
-        <div class="detail-section">
-          <span class="field-label">General Notes</span>
-          <p id="detail-notes" class="preserve-lines"></p>
-        </div>
+        <section class="detail-section" id="p-contact-section">
+          <h3 class="field-label">Phone contact</h3>
+          <div id="p-contact"></div>
+        </section>
 
-        <div class="detail-section">
-          <span class="field-label">Connections</span>
-          <div id="detail-links" class="chip-list"></div>
-        </div>
-
-        <hr class="divider" />
-
-        <div class="detail-section">
-          <div class="section-row">
-            <span class="field-label">Interaction History</span>
-          </div>
-          <form id="quick-log-form" class="quick-log-box">
-            <div class="quick-log-top">
-              <input type="date" id="log-date" required />
-              <input type="text" id="log-location" placeholder="Where / Event (optional)" />
-            </div>
-            <div class="quick-log-bottom">
-              <input type="text" id="log-summary" placeholder="What did you talk about?" required />
-              <button type="submit" class="btn btn-primary btn-sm">Log</button>
-            </div>
+        <section class="detail-section">
+          <h3 class="field-label">Ask next time</h3>
+          <ul id="p-followups" class="check-list"></ul>
+          <form id="p-followup-form" class="inline-form">
+            <input type="text" id="p-followup-input" placeholder="Add something to ask…" required />
+            <button class="btn btn-secondary btn-sm" type="submit">Add</button>
           </form>
-          <div id="detail-interactions" class="timeline"></div>
-        </div>
-      </div>
+        </section>
 
+        <section class="detail-section">
+          <h3 class="field-label">Key dates</h3>
+          <ul id="p-dates" class="plain-list"></ul>
+          <form id="p-date-form" class="inline-form wrap">
+            <input type="text" id="p-date-label" placeholder="e.g. Birthday" required />
+            <input type="date" id="p-date-value" required />
+            <label class="check-inline"><input type="checkbox" id="p-date-recurring" checked /> Yearly</label>
+            <button class="btn btn-secondary btn-sm" type="submit">Add</button>
+          </form>
+        </section>
+
+        <section class="detail-section">
+          <h3 class="field-label">Connections</h3>
+          <div id="p-links" class="chip-list"></div>
+          <form id="p-link-form" class="inline-form wrap">
+            <select id="p-link-target" required><option value="">Link to…</option></select>
+            <input type="text" id="p-link-label" placeholder="They are… (e.g. Partner of)" />
+            <input type="text" id="p-link-reciprocal" placeholder="…and the other way round" />
+            <button class="btn btn-secondary btn-sm" type="submit">Link</button>
+          </form>
+        </section>
+
+        <section class="detail-section">
+          <h3 class="field-label">Notes</h3>
+          <form id="p-note-form" class="note-form">
+            <div class="inline-form">
+              <input type="date" id="p-note-date" required />
+              <input type="text" id="p-note-location" placeholder="Where (optional)" />
+            </div>
+            <textarea id="p-note-text" rows="2" placeholder="Add a note…" required></textarea>
+            <button class="btn btn-secondary btn-sm" type="submit">Add note</button>
+          </form>
+          <div id="p-notes" class="timeline"></div>
+        </section>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary close-modal" data-close="person-modal">Close</button>
+        <button id="p-edit-btn" class="btn btn-primary">Edit</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ADD / EDIT -->
+  <div id="editor-modal" class="modal-backdrop hidden" data-sticky="1">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 id="editor-title">Add person</h2>
+        <button class="btn btn-icon close-modal" data-close="editor-modal" aria-label="Close">&times;</button>
+      </div>
+      <form id="editor-form" class="modal-body">
+        <input type="hidden" id="e-id" />
+        <button type="button" id="e-pick-contact" class="btn btn-secondary btn-sm btn-full contact-only">&#128222; Fill from phone contacts</button>
+        <p id="e-contact-note" class="muted small-text hidden"></p>
+        <div class="form-group">
+          <label for="e-name">Name</label>
+          <input type="text" id="e-name" required />
+        </div>
+        <div class="form-group">
+          <label for="e-category">Context</label>
+          <select id="e-category">
+            <option>Work</option><option>Social</option><option>Both</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="e-summary">Who they are</label>
+          <textarea id="e-summary" rows="3" placeholder="Role, how you know them, anything that helps you place them"></textarea>
+        </div>
+      </form>
       <div class="modal-footer space-between">
-        <button id="delete-person-btn" class="btn btn-danger-outline">Delete</button>
+        <button id="e-delete-btn" type="button" class="btn btn-danger-outline">Delete</button>
         <div class="footer-right">
-          <button class="btn btn-secondary close-modal" data-close="detail-modal">Close</button>
-          <button id="edit-person-btn" class="btn btn-primary">Edit Profile</button>
+          <button type="button" class="btn btn-secondary close-modal" data-close="editor-modal">Cancel</button>
+          <button type="submit" form="editor-form" class="btn btn-primary">Save</button>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- ADD / EDIT PERSON MODAL -->
-  <div id="editor-modal" class="modal-backdrop hidden">
+  <!-- BULK IMPORT -->
+  <div id="import-modal" class="modal-backdrop hidden" data-sticky="1">
     <div class="modal-card modal-large">
       <div class="modal-header">
-        <h2 id="editor-title">Add Person</h2>
-        <button class="btn btn-icon close-modal" data-close="editor-modal">&times;</button>
-      </div>
-
-      <div class="modal-body">
-        <!-- AI DICTATE / PASTE BAR -->
-        <div class="ai-box">
-          <div class="ai-box-header">
-            <span class="field-label">Quick Dictate or Paste (AI Auto-Fill)</span>
-            <button type="button" id="dictate-btn" class="btn btn-sm btn-secondary">
-              &#127908; Dictate
-            </button>
-          </div>
-          <textarea
-            id="ai-raw-input"
-            rows="2"
-            placeholder="e.g. Met Dr Sarah Jenkins at Worcester ICU audit, tall with glasses, used to work in Bristol, partner is Tom, two kids..."
-          ></textarea>
-          <div class="ai-box-actions">
-            <span id="ai-parse-status" class="muted small-text"></span>
-            <button type="button" id="ai-parse-btn" class="btn btn-sm btn-primary">
-              Auto-Fill Fields
-            </button>
-          </div>
-        </div>
-
-        <form id="person-form">
-          <input type="hidden" id="edit-person-id" />
-
-          <div class="photo-upload-row">
-            <div id="photo-preview" class="avatar avatar-lg">?</div>
-            <div class="photo-controls">
-              <label class="btn btn-secondary btn-sm file-label">
-                Choose / Take Photo
-                <input type="file" id="photo-input" accept="image/*" hidden />
-              </label>
-              <button type="button" id="remove-photo-btn" class="btn btn-sm btn-danger-outline hidden">
-                Remove
-              </button>
-              <span class="muted small-text">Auto-compressed for offline sync</span>
-            </div>
-          </div>
-
-          <div class="form-row-2">
-            <div class="form-group">
-              <label for="field-name">Full Name *</label>
-              <input type="text" id="field-name" required placeholder="e.g. James Patel" />
-            </div>
-            <div class="form-group">
-              <label for="field-category">Context</label>
-              <select id="field-category">
-                <option value="Work">Work</option>
-                <option value="Social">Social</option>
-                <option value="Both">Both</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label for="field-role">Role / Organisation</label>
-            <input type="text" id="field-role" placeholder="e.g. Consultant Anaesthetist, Alexandra Hospital" />
-          </div>
-
-          <div class="form-group">
-            <label for="field-descriptor">Descriptor (Physical / Memorable Traits)</label>
-            <input
-              type="text"
-              id="field-descriptor"
-              placeholder="e.g. Tall, silver beard, cycle commuter, Scottish accent"
-            />
-          </div>
-
-          <div class="form-row-2">
-            <div class="form-group">
-              <label for="field-family">Family &amp; Personal</label>
-              <textarea id="field-family" rows="3" placeholder="Partner, children, pets, milestones..."></textarea>
-            </div>
-            <div class="form-group">
-              <label for="field-experience">Previous Experience &amp; Where Met</label>
-              <textarea id="field-experience" rows="3" placeholder="Past jobs, training, hobbies, how you met..."></textarea>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label for="field-notes">General Notes</label>
-            <textarea id="field-notes" rows="2" placeholder="Any other helpful background..."></textarea>
-          </div>
-
-          <!-- INITIAL INTERACTION (NEW PERSON ONLY) -->
-          <div id="initial-interaction-group" class="form-group">
-            <label>First Interaction Log (Optional)</label>
-            <div class="form-row-2">
-              <input type="date" id="field-init-date" />
-              <input type="text" id="field-init-location" placeholder="Location / Event" />
-            </div>
-            <input
-              type="text"
-              id="field-init-summary"
-              class="mt-xs"
-              placeholder="Summary of initial conversation..."
-            />
-          </div>
-
-          <!-- RELATIONAL LINKS -->
-          <div class="form-group">
-            <label>Connections (Bidirectional Links)</label>
-            <div class="link-builder">
-              <select id="link-target-select">
-                <option value="">Select person to link...</option>
-              </select>
-              <input type="text" id="link-label-input" placeholder="Relationship (e.g. Partner of)" />
-              <input type="text" id="link-reciprocal-input" placeholder="Reciprocal (e.g. Partner of)" />
-              <button type="button" id="add-link-btn" class="btn btn-secondary btn-sm">Add Link</button>
-            </div>
-            <div id="editor-links-list" class="chip-list mt-xs"></div>
-          </div>
-        </form>
-      </div>
-
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary close-modal" data-close="editor-modal">Cancel</button>
-        <button type="submit" form="person-form" class="btn btn-primary">Save Person</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- AI BULK IMPORTER MODAL -->
-  <div id="import-modal" class="modal-backdrop hidden">
-    <div class="modal-card modal-large">
-      <div class="modal-header">
-        <h2>AI Bulk Importer</h2>
-        <button class="btn btn-icon close-modal" data-close="import-modal">&times;</button>
+        <h2>Bulk import</h2>
+        <button class="btn btn-icon close-modal" data-close="import-modal" aria-label="Close">&times;</button>
       </div>
       <div class="modal-body">
-        <p class="muted small-text">
-          Paste raw notes, spreadsheet rows, or messy lists covering multiple people. Gemini will structure them into profiles for review before saving.
-        </p>
-        <textarea
-          id="bulk-raw-input"
-          rows="6"
-          placeholder="Paste your existing notes or rows here..."
-        ></textarea>
-        <div class="ai-box-actions mt-xs">
+        <p class="muted small-text">Paste notes, a list or spreadsheet rows covering several people. Gemini sorts them into people for you to check before saving.</p>
+        <textarea id="bulk-text" rows="7" placeholder="Paste here…"></textarea>
+        <div class="row-end mt-xs">
           <span id="bulk-status" class="muted small-text"></span>
-          <button type="button" id="bulk-parse-btn" class="btn btn-primary">Parse Text</button>
+          <button id="bulk-parse-btn" class="btn btn-primary btn-sm">Read text</button>
         </div>
-        <div id="bulk-preview-list" class="bulk-preview-list"></div>
+        <div id="bulk-list" class="bulk-list"></div>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-secondary close-modal" data-close="import-modal">Close</button>
-        <button type="button" id="bulk-save-btn" class="btn btn-primary hidden">Import Selected</button>
+        <button class="btn btn-secondary close-modal" data-close="import-modal">Close</button>
+        <button id="bulk-save-btn" class="btn btn-primary hidden">Import selected</button>
       </div>
     </div>
   </div>
 
-  <!-- SETTINGS MODAL -->
+  <!-- SETTINGS -->
   <div id="settings-modal" class="modal-backdrop hidden">
     <div class="modal-card">
       <div class="modal-header">
         <h2>Settings</h2>
-        <button class="btn btn-icon close-modal" data-close="settings-modal">&times;</button>
+        <button class="btn btn-icon close-modal" data-close="settings-modal" aria-label="Close">&times;</button>
       </div>
       <div class="modal-body">
         <div class="form-group">
-          <label for="gemini-key-input">Gemini API Key (for Dictation &amp; Bulk Import)</label>
-          <input type="password" id="gemini-key-input" placeholder="AIzaSy..." />
-          <p class="muted small-text mt-xs">
-            Saved privately inside your locked Firestore account so it syncs across your devices without exposing keys in GitHub.
-          </p>
-          <button type="button" id="save-settings-btn" class="btn btn-primary btn-sm mt-xs">
-            Save API Key
-          </button>
-          <span id="settings-status" class="small-text ml-xs"></span>
+          <label for="gemini-key-input">Gemini API key</label>
+          <input type="password" id="gemini-key-input" placeholder="AIza…" autocomplete="off" />
+          <label for="gemini-model-input" class="mt-xs">Model</label>
+          <input type="text" id="gemini-model-input" placeholder="gemini-flash-latest" />
+          <p class="muted small-text mt-xs">Use a key from a project with billing turned on, so Google doesn't use your notes to improve its products. Stored in your Firestore account.</p>
+          <button type="button" id="save-settings-btn" class="btn btn-primary btn-sm">Save</button>
+          <span id="settings-status" class="small-text"></span>
         </div>
-
         <hr class="divider" />
-
         <div class="form-group">
-          <label>Data Backup</label>
-          <button type="button" id="export-json-btn" class="btn btn-secondary btn-sm">
-            Download JSON Backup
-          </button>
+          <label>Data</label>
+          <div class="btn-row">
+            <button type="button" id="open-import-btn" class="btn btn-secondary btn-sm">Bulk import (AI)</button>
+            <button type="button" id="export-json-btn" class="btn btn-secondary btn-sm">Download backup</button>
+            <label class="btn btn-secondary btn-sm">Restore backup<input type="file" id="restore-input" accept="application/json" hidden /></label>
+          </div>
+          <span id="data-status" class="small-text"></span>
         </div>
-
         <hr class="divider" />
-
         <div class="space-between">
           <span id="user-email-display" class="muted small-text"></span>
-          <button type="button" id="signout-btn" class="btn btn-danger-outline btn-sm">Sign Out</button>
+          <button type="button" id="signout-btn" class="btn btn-danger-outline btn-sm">Sign out</button>
         </div>
+        <p class="muted small-text">Signing out also clears the copy of your data stored on this device.</p>
       </div>
     </div>
   </div>
