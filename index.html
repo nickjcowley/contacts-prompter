@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <meta name="theme-color" content="#1e3a5f" />
+  <title>PeopleLog — Personal CRM</title>
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="icon" type="image/svg+xml" href="./icon.svg" />
+  <link rel="apple-touch-icon" href="./icon.svg" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <!-- AUTH SCREEN -->
+  <main id="auth-view" class="auth-container hidden">
+    <div class="auth-card">
+      <img src="./icon.svg" alt="PeopleLog" class="auth-logo" />
+      <h1>PeopleLog</h1>
+      <p class="muted">Offline-first personal record of work &amp; social contacts.</p>
+      <button id="google-signin-btn" class="btn btn-primary btn-full">
+        Sign in with Google
+      </button>
+      <p id="auth-error" class="error-text hidden"></p>
+    </div>
+  </main>
+
+  <!-- MAIN APPLICATION -->
+  <div id="app-view" class="app-shell hidden">
+    <header class="topbar">
+      <div class="topbar-left">
+        <img src="./icon.svg" alt="" class="header-logo" />
+        <div>
+          <h1 class="app-title">PeopleLog</h1>
+          <span id="sync-status" class="status-pill status-synced">Connecting...</span>
+        </div>
+      </div>
+      <div class="topbar-actions">
+        <button id="open-import-btn" class="btn btn-secondary" title="AI Bulk Import">
+          Bulk Import
+        </button>
+        <button id="open-settings-btn" class="btn btn-icon" title="Settings" aria-label="Settings">
+          &#9881;
+        </button>
+        <button id="open-add-btn" class="btn btn-primary">
+          + Add
+        </button>
+      </div>
+    </header>
+
+    <section class="search-bar-wrap">
+      <div class="search-input-box">
+        <span class="search-icon">&#128269;</span>
+        <input
+          type="search"
+          id="search-input"
+          placeholder="Search name, descriptor, family, experience, notes..."
+          autocomplete="off"
+        />
+        <button id="clear-search-btn" class="clear-btn hidden" aria-label="Clear search">&times;</button>
+      </div>
+      <div id="results-count" class="results-meta">0 people</div>
+    </section>
+
+    <main id="people-grid" class="people-grid"></main>
+  </div>
+
+  <!-- PERSON DETAIL MODAL -->
+  <div id="detail-modal" class="modal-backdrop hidden">
+    <div class="modal-card modal-large">
+      <div class="modal-header">
+        <div class="detail-hero">
+          <div id="detail-avatar" class="avatar avatar-lg"></div>
+          <div>
+            <div class="detail-title-row">
+              <h2 id="detail-name"></h2>
+              <span id="detail-category" class="badge"></span>
+            </div>
+            <p id="detail-role" class="muted"></p>
+          </div>
+        </div>
+        <button class="btn btn-icon close-modal" data-close="detail-modal">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <div id="detail-descriptor-box" class="descriptor-callout">
+          <span class="field-label">Descriptor</span>
+          <p id="detail-descriptor"></p>
+        </div>
+
+        <div class="detail-grid">
+          <div class="detail-section">
+            <span class="field-label">Family &amp; Personal</span>
+            <p id="detail-family" class="preserve-lines"></p>
+          </div>
+          <div class="detail-section">
+            <span class="field-label">Previous Experience &amp; Context</span>
+            <p id="detail-experience" class="preserve-lines"></p>
+          </div>
+        </div>
+
+        <div class="detail-section">
+          <span class="field-label">General Notes</span>
+          <p id="detail-notes" class="preserve-lines"></p>
+        </div>
+
+        <div class="detail-section">
+          <span class="field-label">Connections</span>
+          <div id="detail-links" class="chip-list"></div>
+        </div>
+
+        <hr class="divider" />
+
+        <div class="detail-section">
+          <div class="section-row">
+            <span class="field-label">Interaction History</span>
+          </div>
+          <form id="quick-log-form" class="quick-log-box">
+            <div class="quick-log-top">
+              <input type="date" id="log-date" required />
+              <input type="text" id="log-location" placeholder="Where / Event (optional)" />
+            </div>
+            <div class="quick-log-bottom">
+              <input type="text" id="log-summary" placeholder="What did you talk about?" required />
+              <button type="submit" class="btn btn-primary btn-sm">Log</button>
+            </div>
+          </form>
+          <div id="detail-interactions" class="timeline"></div>
+        </div>
+      </div>
+
+      <div class="modal-footer space-between">
+        <button id="delete-person-btn" class="btn btn-danger-outline">Delete</button>
+        <div class="footer-right">
+          <button class="btn btn-secondary close-modal" data-close="detail-modal">Close</button>
+          <button id="edit-person-btn" class="btn btn-primary">Edit Profile</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ADD / EDIT PERSON MODAL -->
+  <div id="editor-modal" class="modal-backdrop hidden">
+    <div class="modal-card modal-large">
+      <div class="modal-header">
+        <h2 id="editor-title">Add Person</h2>
+        <button class="btn btn-icon close-modal" data-close="editor-modal">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <!-- AI DICTATE / PASTE BAR -->
+        <div class="ai-box">
+          <div class="ai-box-header">
+            <span class="field-label">Quick Dictate or Paste (AI Auto-Fill)</span>
+            <button type="button" id="dictate-btn" class="btn btn-sm btn-secondary">
+              &#127908; Dictate
+            </button>
+          </div>
+          <textarea
+            id="ai-raw-input"
+            rows="2"
+            placeholder="e.g. Met Dr Sarah Jenkins at Worcester ICU audit, tall with glasses, used to work in Bristol, partner is Tom, two kids..."
+          ></textarea>
+          <div class="ai-box-actions">
+            <span id="ai-parse-status" class="muted small-text"></span>
+            <button type="button" id="ai-parse-btn" class="btn btn-sm btn-primary">
+              Auto-Fill Fields
+            </button>
+          </div>
+        </div>
+
+        <form id="person-form">
+          <input type="hidden" id="edit-person-id" />
+
+          <div class="photo-upload-row">
+            <div id="photo-preview" class="avatar avatar-lg">?</div>
+            <div class="photo-controls">
+              <label class="btn btn-secondary btn-sm file-label">
+                Choose / Take Photo
+                <input type="file" id="photo-input" accept="image/*" hidden />
+              </label>
+              <button type="button" id="remove-photo-btn" class="btn btn-sm btn-danger-outline hidden">
+                Remove
+              </button>
+              <span class="muted small-text">Auto-compressed for offline sync</span>
+            </div>
+          </div>
+
+          <div class="form-row-2">
+            <div class="form-group">
+              <label for="field-name">Full Name *</label>
+              <input type="text" id="field-name" required placeholder="e.g. James Patel" />
+            </div>
+            <div class="form-group">
+              <label for="field-category">Context</label>
+              <select id="field-category">
+                <option value="Work">Work</option>
+                <option value="Social">Social</option>
+                <option value="Both">Both</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="field-role">Role / Organisation</label>
+            <input type="text" id="field-role" placeholder="e.g. Consultant Anaesthetist, Alexandra Hospital" />
+          </div>
+
+          <div class="form-group">
+            <label for="field-descriptor">Descriptor (Physical / Memorable Traits)</label>
+            <input
+              type="text"
+              id="field-descriptor"
+              placeholder="e.g. Tall, silver beard, cycle commuter, Scottish accent"
+            />
+          </div>
+
+          <div class="form-row-2">
+            <div class="form-group">
+              <label for="field-family">Family &amp; Personal</label>
+              <textarea id="field-family" rows="3" placeholder="Partner, children, pets, milestones..."></textarea>
+            </div>
+            <div class="form-group">
+              <label for="field-experience">Previous Experience &amp; Where Met</label>
+              <textarea id="field-experience" rows="3" placeholder="Past jobs, training, hobbies, how you met..."></textarea>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="field-notes">General Notes</label>
+            <textarea id="field-notes" rows="2" placeholder="Any other helpful background..."></textarea>
+          </div>
+
+          <!-- INITIAL INTERACTION (NEW PERSON ONLY) -->
+          <div id="initial-interaction-group" class="form-group">
+            <label>First Interaction Log (Optional)</label>
+            <div class="form-row-2">
+              <input type="date" id="field-init-date" />
+              <input type="text" id="field-init-location" placeholder="Location / Event" />
+            </div>
+            <input
+              type="text"
+              id="field-init-summary"
+              class="mt-xs"
+              placeholder="Summary of initial conversation..."
+            />
+          </div>
+
+          <!-- RELATIONAL LINKS -->
+          <div class="form-group">
+            <label>Connections (Bidirectional Links)</label>
+            <div class="link-builder">
+              <select id="link-target-select">
+                <option value="">Select person to link...</option>
+              </select>
+              <input type="text" id="link-label-input" placeholder="Relationship (e.g. Partner of)" />
+              <input type="text" id="link-reciprocal-input" placeholder="Reciprocal (e.g. Partner of)" />
+              <button type="button" id="add-link-btn" class="btn btn-secondary btn-sm">Add Link</button>
+            </div>
+            <div id="editor-links-list" class="chip-list mt-xs"></div>
+          </div>
+        </form>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary close-modal" data-close="editor-modal">Cancel</button>
+        <button type="submit" form="person-form" class="btn btn-primary">Save Person</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- AI BULK IMPORTER MODAL -->
+  <div id="import-modal" class="modal-backdrop hidden">
+    <div class="modal-card modal-large">
+      <div class="modal-header">
+        <h2>AI Bulk Importer</h2>
+        <button class="btn btn-icon close-modal" data-close="import-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="muted small-text">
+          Paste raw notes, spreadsheet rows, or messy lists covering multiple people. Gemini will structure them into profiles for review before saving.
+        </p>
+        <textarea
+          id="bulk-raw-input"
+          rows="6"
+          placeholder="Paste your existing notes or rows here..."
+        ></textarea>
+        <div class="ai-box-actions mt-xs">
+          <span id="bulk-status" class="muted small-text"></span>
+          <button type="button" id="bulk-parse-btn" class="btn btn-primary">Parse Text</button>
+        </div>
+        <div id="bulk-preview-list" class="bulk-preview-list"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary close-modal" data-close="import-modal">Close</button>
+        <button type="button" id="bulk-save-btn" class="btn btn-primary hidden">Import Selected</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SETTINGS MODAL -->
+  <div id="settings-modal" class="modal-backdrop hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2>Settings</h2>
+        <button class="btn btn-icon close-modal" data-close="settings-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="gemini-key-input">Gemini API Key (for Dictation &amp; Bulk Import)</label>
+          <input type="password" id="gemini-key-input" placeholder="AIzaSy..." />
+          <p class="muted small-text mt-xs">
+            Saved privately inside your locked Firestore account so it syncs across your devices without exposing keys in GitHub.
+          </p>
+          <button type="button" id="save-settings-btn" class="btn btn-primary btn-sm mt-xs">
+            Save API Key
+          </button>
+          <span id="settings-status" class="small-text ml-xs"></span>
+        </div>
+
+        <hr class="divider" />
+
+        <div class="form-group">
+          <label>Data Backup</label>
+          <button type="button" id="export-json-btn" class="btn btn-secondary btn-sm">
+            Download JSON Backup
+          </button>
+        </div>
+
+        <hr class="divider" />
+
+        <div class="space-between">
+          <span id="user-email-display" class="muted small-text"></span>
+          <button type="button" id="signout-btn" class="btn btn-danger-outline btn-sm">Sign Out</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
