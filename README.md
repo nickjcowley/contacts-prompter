@@ -42,7 +42,7 @@ Maps keyed by id (rather than arrays) mean edits made on two devices while offli
 
 ## Deploying changes
 
-Bump `CACHE_NAME` in `sw.js` with each release.
+With each release, bump `CACHE_NAME` in `sw.js` and the matching `?v=` numbers on `app.js` and `styles.css` in `index.html` and `sw.js`.
 
 ## Privacy note
 

@@ -1,10 +1,10 @@
-// Bump this when you deploy, so phones drop the old copy promptly.
-const CACHE_NAME = "peoplelog-v2.0.0";
+// When you deploy: bump this AND the ?v= numbers in index.html (and below).
+const CACHE_NAME = "peoplelog-v2.0.1";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./styles.css",
-  "./app.js",
+  "./styles.css?v=2.0.1",
+  "./app.js?v=2.0.1",
   "./manifest.json",
   "./icon.svg",
   "./icon-192.png",
@@ -45,7 +45,7 @@ self.addEventListener("fetch", (event) => {
   // Own files: network first (so updates show immediately), cache when offline
   if (url.origin === self.location.origin) {
     event.respondWith(
-      fetch(req)
+      fetch(req, { cache: "no-cache" })
         .then((res) => {
           if (res.ok) {
             const copy = res.clone();
