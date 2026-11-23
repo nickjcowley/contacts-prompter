@@ -25,12 +25,12 @@ import {
 // 1. PASTE YOUR FIREBASE WEB CONFIG HERE
 // ==========================================
 const firebaseConfig = {
-  apiKey: "YOUR_FIREBASE_API_KEY",
-  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT_ID.firebasestorage.app",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyB-Wy-3cw0ealhtbdnhRiDxgfDVMGKfF2A",
+  authDomain: "contacts-prompter.firebaseapp.com",
+  projectId: "contacts-prompter",
+  storageBucket: "contacts-prompter.firebasestorage.app",
+  messagingSenderId: "454892878472",
+  appId: "1:454892878472:web:a045808a3d2f5c179cfd3d"
 };
 
 const app = initializeApp(firebaseConfig);
